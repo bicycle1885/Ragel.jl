@@ -164,99 +164,79 @@ end
 #
 # This macro handles some the dirty work of maintaining state, refilling
 # buffers, etc.
-#
-# Args:
-#
 macro generate_read_fuction(machine_name, input_type, output_type, ragel_body)
-    start_state = esc(symbol(string(machine_name, "_start")))
-    accept_state = esc(symbol(string(machine_name, "_first_final")))
-    error_state = esc(symbol(string(machine_name, "_error")))
+    #start_state  = symbol(machine_name, "_start")
+    accept_state = symbol(machine_name, "_first_final")
+    error_state  = symbol(machine_name, "_error")
 
-    # ragel needs these specific variable names so we have to escape them
-    # throughout
-    p = esc(:p)
-    pe = esc(:pe)
-    cs = esc(:cs)
-    data = esc(:data)
-    state = esc(:state)
-    eof = esc(:eof)
-    yield = esc(:yield)
-    output = esc(:output)
-    input = esc(:input)
-
-    quote
-        function $(esc(:(Base.read!)))(input::$(esc(input_type)),
-                                     state::State, output::$(esc(output_type)))
-            $(state) = state
-            $(input) = input
-            $(output) = output
-
-            if $(state).finished
+    esc(quote
+        function Base.read!(input::$(input_type), state::State, output::$(output_type))
+            if state.finished
                 return false
             end
 
-            $(p) = $(state).p
-            $(pe) = $(state).stream.available
-            $(cs) = $(state).cs
-            $(data) = $(state).stream.buffer
-            $(yield) = false
+            p = state.p
+            pe = state.stream.available
+            cs = state.cs
+            data = state.stream.buffer
+            yield = false
 
             # run the parser until all input is consumed or a match is found
-            $(eof) = $(pe) + 1
+            eof = pe + 1
             @inbounds while true
-                if $(p) == $(pe)
-                    $(state).p = $(p)
-                    $(state).stream.available = $(pe)
-                    nb = fillbuffer!($(state))
-                    $(p) = $(state).p
-                    $(pe) = $(state).stream.available
+                if p == pe
+                    state.p = p
+                    state.stream.available = pe
+                    nb = fillbuffer!(state)
+                    p = state.p
+                    pe = state.stream.available
                     if nb == 0
-                        $(eof) = $(pe) # trigger ragel's eof handling
+                        eof = pe  # trigger ragel's eof handling
                     else
-                        $(eof) = $(pe) + 1
+                        eof = pe + 1
                     end
                 end
 
-                $(esc(ragel_body))
+                $(ragel_body)
 
-                if $(cs) == $(error_state) && !$(yield)
+                if cs == $(error_state) && !yield
                     error(string(
                         $("Error parsing $(machine_name) input on line "),
-                        $(state).linenum))
-                elseif $(yield)
-                    if $(p) == $(pe)
-                        $(state).p = $(p)
-                        $(state).stream.available = $(pe)
-                        fillbuffer!($(state))
-                        $(p) = $(state).p
-                        $(pe) = $(state).stream.available
+                        state.linenum))
+                elseif yield
+                    if p == pe
+                        state.p = p
+                        state.stream.available = pe
+                        fillbuffer!(state)
+                        p = state.p
+                        pe = state.stream.available
                     end
 
                     break
-                elseif $(p) == $(pe) == $(eof)
+                elseif p == pe == eof
                     break
                 end
             end
 
-            if $(p) == $(pe) && $(cs) < $(accept_state)
+            if p == pe && cs < $(accept_state)
                 error($("Unexpected end of input while parsing $(machine_name)"))
             end
 
-            $(state).p = $(p)
-            $(state).stream.available = $(pe)
-            $(state).cs = $(cs)
+            state.p = p
+            state.stream.available = pe
+            state.cs = cs
 
-            if $(p) >= $(pe)
-                $(state).finished = true
+            if p ≥ pe
+                state.finished = true
             end
-            return $(yield)
+            return yield
         end
 
-        function $(esc(:(Base.read!)))(input::$(esc(input_type)), output::$(esc(output_type)))
+        function Base.read!(input::$(input_type), output::$(output_type))
             # specialize on input.state
-            $(esc(:read!))(input, input.state, output)
+            read!(input, input.state, output)
         end
-    end
+    end)
 end
 
 
