@@ -1,5 +1,10 @@
 module Ragel
 
+export
+    FileFormat,
+    AbstractParser,
+    State
+
 using BufferedStreams
 
 abstract FileFormat
@@ -100,13 +105,11 @@ end
 
 # Macros that help make common parsing tasks moce succinct
 
-
 macro anchor!()
     quote
         anchor!($(esc(:state)), $(esc(:p)))
     end
 end
-
 
 macro copy_from_anchor!(dest)
     quote
@@ -115,14 +118,12 @@ macro copy_from_anchor!(dest)
     end
 end
 
-
 macro append_from_anchor!(dest)
     quote
         firstpos = upanchor!($(esc(:state)))
         append!($(esc(dest)), $(esc(:state)).stream.buffer, firstpos, $(esc(:p)))
     end
 end
-
 
 macro int64_from_anchor!()
     quote
@@ -131,6 +132,15 @@ macro int64_from_anchor!()
     end
 end
 
+macro ascii_from_anchor!()
+    quote
+        firstpos = upanchor!($(esc(:state)))
+        n = $(esc(:p)) - firstpos + 1
+        dst = Vector{UInt8}(n)
+        copy!(dst, 1, $(esc(:state)).stream.buffer, firstpos, n)
+        ASCIIString(dst)
+    end
+end
 
 macro load_from_anchor!(T)
     quote
@@ -139,7 +149,6 @@ macro load_from_anchor!(T)
             pointer($(esc(:state)).stream.buffer, firstpos)))
     end
 end
-
 
 # return the current character
 macro char()
