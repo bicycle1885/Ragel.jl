@@ -134,6 +134,18 @@ macro int64_from_anchor!()
     end
 end
 
+macro float64_from_anchor!()
+    quote
+        firstpos = upanchor!($(esc(:state))) - 1
+        get(ccall(
+            :jl_try_substrtod,
+            Nullable{Float64},
+            (Ptr{UInt8}, Csize_t, Csize_t),
+            $(esc(:state)).stream.buffer, firstpos, $(esc(:p)) - firstpos
+        ))
+    end
+end
+
 macro ascii_from_anchor!()
     quote
         firstpos = upanchor!($(esc(:state)))
